@@ -1,0 +1,9 @@
+http {
+ server {
+   listen 80;
+   
+   location /knowledge_graph {
+     proxy_pass http://knowledge_graph/;
+   }
+ }
+}
