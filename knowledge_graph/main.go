@@ -5,6 +5,7 @@ import (
     "log"
     "net/http"
     "io/ioutil"
+    "strings"
 
      "github.com/tidwall/gjson"
 )
@@ -69,7 +70,9 @@ func handler(client http.ResponseWriter, request *http.Request) {
     links := gjson.Get(string(json), "query.pages.*.links.#.title")
     
     for _, l := range links.Array() {
-        fmt.Fprintf(client, "%s\n", l.String())
+        if !(strings.Contains(l.String(),":")) {
+            fmt.Fprintf(client, "%s\n", l.String())
+        }
     }
 
 }
