@@ -1,0 +1,3 @@
+[submodule "knowledge_graph/subprojects/cpr"]
+	path = knowledge_graph/subprojects/cpr
+	url = ../../whoshuu/cpr
