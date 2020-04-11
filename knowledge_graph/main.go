@@ -10,17 +10,34 @@ import (
 )
 
 func handler(client http.ResponseWriter, request *http.Request) {
-	keys, ok := request.URL.Query()["topic"]
-    
-    if !ok || len(keys[0]) < 1 {
-        log.Println("Url Param 'topic' is missing")
-        fmt.Fprintf(client, "Url Param 'topic' is missing")
+
+	//Query that returns the topics (for now only 1) and errors
+    args := request.URL.Query()
+
+    if len(args["topic"]) == 0 {
+        log.Println("Error, missing required parameter 'topic'")
+        fmt.Fprintf(client, "Error, missing required parameter 'topic'")
         return
     }
 
-    topic := keys[0]
+    if len(args["lang"]) == 0 {
+        log.Println("Error, missing required parameter 'lang'")
+        fmt.Fprintf(client, "Error, missing required parameter 'lang'")
+        return
+    }
 
-    resp, err := http.Get("https://en.wikipedia.org/w/api.php?action=query&prop=links&format=json&pllimit=max&titles="+topic)
+    //topic is the name of the searched page 
+    topic := args["topic"][0]
+    lang := args["lang"][0]
+
+    //Base Url for API
+    var baseURL = "https://" + lang + ".wikipedia.org/w/api.php?action=query"
+
+    //print the topic's name
+    fmt.Fprintf(client, "%s\n\n", topic)
+
+    //Query that returns the topics (for now only 1) and errors for reading the title and the text
+    resp, err := http.Get(baseURL + "&prop=extracts&format=json&explaintext=true&titles=" + topic)
 
     if err != nil {
         log.Fatal(err.Error())
@@ -31,65 +48,30 @@ func handler(client http.ResponseWriter, request *http.Request) {
     json, _ := ioutil.ReadAll(resp.Body)
     fmt.Println(string(json))
     
+    titles := gjson.Get(string(json), "query.pages.*.title")
+    
+    for _, t := range titles.Array() {
+        fmt.Fprintf(client, "https://%s.wikipedia.org/wiki/%s\n\n", lang, t.String())
+    }
+
+    //Query that returns the topics (for now only 1) and errors for reading the link list
+    resp, err = http.Get(baseURL + "&prop=links&format=json&pllimit=max&titles=" + topic)
+
+    if err != nil {
+        log.Fatal(err.Error())
+        fmt.Fprintf(client, "Cannot connect to Wikipedia\n%s", err.Error())
+        return
+    }
+
+    json, _ = ioutil.ReadAll(resp.Body)
+    fmt.Println(string(json))
+    
     links := gjson.Get(string(json), "query.pages.*.links.#.title")
-    fmt.Println(links.Array())
+    
     for _, l := range links.Array() {
         fmt.Fprintf(client, "%s\n", l.String())
     }
 
-
-
-    /*
-    wiki, err := wikimedia.New(wikimedia.Options{
-    	Client:    http.DefaultClient,
-    	URL:       "https://en.wikipedia.org/w/api.php",
-    	UserAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
-    		"(KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36",
-    })
-    
-    if err != nil {
-    	log.Fatal(err.Error())
-    	fmt.Fprintf(client, "Cannot connect to Wikipedia\n%s", err.Error())
-        return
-    }
-    
-    resp, err := wiki.Query(url.Values{
-        "action":      {"query"},
-        "prop":        {"extracts"},
-        "titles":      {topic},
-        "explaintext":    {"true"},
-    })
-
-	if err != nil {
-    	log.Fatal(err.Error())
-    	fmt.Fprintf(client, "Cannot connect to Wikipedia\n%s", err.Error())
-        return
-    }
-    
-    
-	for _, v := range resp.Query.Pages {
-		fmt.Fprintf(client, "https://en.wikipedia.org/wiki/%s\n", v.Title)
-    	fmt.Fprintf(client, "%s:\n\n", v.Title)
-    }
-    
-    resp1, err := wiki.Query(url.Values{
-		"action":      {"query"},
-		"prop":        {"links"},
-		"pllimit":	   {"20"},
-		"titles":      {topic},
-	})
-	
-	if err != nil {
-    	log.Fatal(err.Error())
-    	fmt.Fprintf(client, "Cannot connect to Wikipedia\n%s", err.Error())
-        return
-    }
-	
-	for k, v := range resp1.Query.Pages {
-        fmt.Println(v.Original)
-    	fmt.Fprintf(client, "%s:\n%s\n", k, v.Original)
-    }
-    */
 }
 
 func main() {
