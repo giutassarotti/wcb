@@ -15,8 +15,6 @@ func handler(client http.ResponseWriter, request *http.Request) {
         return
     }
 
-    // Query()["key"] will return an array of items, 
-    // we only want the single item.
     topic := keys[0]
 
     log.Println("Url Param 'topic' is: " + string(topic))
