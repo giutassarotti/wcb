@@ -127,6 +127,7 @@ func handler(client http.ResponseWriter, request *http.Request) {
     		continue
     	}
 
+    	//Replace spaces with _ (it wasn't working with spaces)
 	    resp, err = http.Get(baseURL + "&prop=extracts&format=json&explaintext=true&titles=" + strings.ReplaceAll(l.String(), " ", "_"))
 
     	if err != nil {
