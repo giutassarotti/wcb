@@ -126,8 +126,8 @@ func handler(client http.ResponseWriter, request *http.Request) {
     	if (strings.Contains(l.String(),":")) {
     		continue
     	}
-	
-	    resp, err = http.Get(baseURL + "&prop=extracts&format=json&explaintext=true&titles=" + l.String())
+
+	    resp, err = http.Get(baseURL + "&prop=extracts&format=json&explaintext=true&titles=" + strings.ReplaceAll(l.String(), " ", "_"))
 
     	if err != nil {
 	        log.Fatal(err.Error())
@@ -148,7 +148,7 @@ func handler(client http.ResponseWriter, request *http.Request) {
 		}
 
 		//Prints links' name
-		fmt.Fprintf(client, "\n%s\n", l.String())
+		fmt.Fprintf(client, "%s\n", l.String())
 
 		//link's page text 
 		link_text := link_extract[0].String()
@@ -163,6 +163,8 @@ func handler(client http.ResponseWriter, request *http.Request) {
 		f.AddDocs(link_text)
 
     }
+
+    fmt.Fprintf(client, "\n\n\n")
 
     //Computes topic's weight 
     w := f.Cal(main_text)
