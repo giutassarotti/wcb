@@ -186,7 +186,7 @@ func handler(client http.ResponseWriter, request *http.Request) {
     	//fmt.Fprintf(client, "Weight of %s is %+v .\n", l.String(), w_link)
 
     	//How much they are similar?
-    	sim = (similarity.Cosine(w, w_link) - 0.5)*2
+    	sim = (similarity.Cosine(w, w_link))
 		//fmt.Fprintf(client, "Similarity with %s is %f .\n", l.String(), sim)
 
 		//Saves the similarity
