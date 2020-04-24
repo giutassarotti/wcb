@@ -8,6 +8,14 @@ services:
     restart: always
     networks:
       - wcb
+
+  knowledge_path:
+    build:
+      context: "./knowledge_path"
+      dockerfile: "Dockerfile"
+    restart: always
+    networks:
+      - wcb
       
   proxy:
     build:
