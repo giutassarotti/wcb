@@ -6,6 +6,7 @@ import (
     "net/http"
     "io/ioutil"
     "strings"
+    "sort"
 
     //Json
     "github.com/tidwall/gjson"
@@ -17,6 +18,11 @@ import (
 
 //   http://localhost:8080/knowledge_graph?topic=dog&lang=en
 
+type Similarity struct {
+    title string
+    point float64
+}
+
 //Creates topic and language var and looks for errors
 func getQuery(request *http.Request) (string, string, bool, string) {
     args := request.URL.Query()
@@ -24,15 +30,13 @@ func getQuery(request *http.Request) (string, string, bool, string) {
     //If there is not the topic(s) in the query
     if len(args["topic"]) == 0 {
         log.Println("Error, missing required parameter 'topic'")
-        err := "Error, missing required parameter 'topic'"
-        return "", "", false, err
+        return "", "", false, "Error, missing required parameter 'topic'"
     }
 
     //If there is not the language in the query
     if len(args["lang"]) == 0 {
         log.Println("Error, missing required parameter 'lang'")
-        err :=  "Error, missing required parameter 'lang'"
-        return "", "", false, err
+        return "", "", false, "Error, missing required parameter 'lang'"
     }
 
     topic := args["topic"][0]
@@ -43,11 +47,11 @@ func getQuery(request *http.Request) (string, string, bool, string) {
 }
 
 //Returns the title and the text
-func getPage(client http.ResponseWriter, topic string, baseURL string) (string, string, bool) {
+func getPage(topic string, baseURL string) (string, string, bool, string) {
 
     //TODO we need them?
     //Deletes the : links (for now, they seems useless)
-    if (strings.Contains(topic,":")) {return "", "", false}
+    if (strings.Contains(topic,":")) {return "", "", false, ""}
 
     //Query for reading the title and the text
     //Note: Replace spaces with _ (it wasn't working with spaces)
@@ -55,8 +59,7 @@ func getPage(client http.ResponseWriter, topic string, baseURL string) (string, 
 
     if err != nil {
         log.Fatal(err.Error())
-        fmt.Fprintf(client, "Cannot connect to Wikipedia\n%s", err.Error())
-        return "", "", false
+        return "", "", false, "Cannot connect to Wikipedia\n" + err.Error()
     }
 
 	json, _ := ioutil.ReadAll(resp.Body)
@@ -64,7 +67,8 @@ func getPage(client http.ResponseWriter, topic string, baseURL string) (string, 
 	//Controls if there's a extract (it wouldn't be a usefull page)
 	extract := gjson.Get(string(json), "query.pages.*.extract").Array()
 	
-	if len(extract) == 0 {return "", "", false}
+	//It means it's not a wikipedia page
+    if len(extract) == 0 {return "", "", false, ""}
 	
 	//topic's exact title
 	title := gjson.Get(string(json), "query.pages.*.title").Array()[0].String()
@@ -73,18 +77,17 @@ func getPage(client http.ResponseWriter, topic string, baseURL string) (string, 
 	text := extract[0].String()
 
 
-	return title, text, true
+	return title, text, true, ""
 }
 
 //Returns the links
-func getLinks(client http.ResponseWriter, main_title string, baseURL string) []gjson.Result {
+func getLinks(main_title string, baseURL string) ([]gjson.Result, bool, string) {
 	//Query for errors and the link list
     resp, err := http.Get(baseURL + "&prop=links&format=json&pllimit=max&titles=" + strings.ReplaceAll(main_title, " ", "_"))
 
     if err != nil {
         log.Fatal(err.Error())
-        fmt.Fprintf(client, "Cannot connect to Wikipedia\n%s", err.Error())
-        return nil
+        return nil, false, "Cannot connect to Wikipedia\n" + err.Error()
     }
 
     json, _ := ioutil.ReadAll(resp.Body)
@@ -94,7 +97,7 @@ func getLinks(client http.ResponseWriter, main_title string, baseURL string) []g
 
 	
     
-    return links
+    return links, true, ""
 }
 
 //main
@@ -112,9 +115,12 @@ func handler(client http.ResponseWriter, request *http.Request) {
     baseURL := "https://" + lang + ".wikipedia.org/w/api.php?action=query"
 
     //Returns the exact title and the text
-    main_title, main_text, ok := getPage(client, topic, baseURL)
+    main_title, main_text, ok, err := getPage(topic, baseURL)
 
-    if (!ok) { fmt.Fprintf(client, "Are you sure about this Wikipedia's Page? It seems to be not good\n\n\n") }
+    if (!ok) { 
+        fmt.Fprintf(client, err)
+        return 
+    }
 
 	//Prints the text
     //fmt.Fprintln(client, main_text)
@@ -123,9 +129,13 @@ func handler(client http.ResponseWriter, request *http.Request) {
     fmt.Fprintf(client, "Topic's name:   %s\n\n", main_title)
     fmt.Fprintf(client, "Topic's link:   https://%s.wikipedia.org/wiki/%s\n\n\n", lang, main_title)
     
-    
     //Returns links' array (not as a string)
-    links := getLinks(client, main_title, baseURL)
+    links, ok, err := getLinks(main_title, baseURL)
+
+    if (!ok) { 
+        fmt.Fprintf(client, err)
+        return 
+    }
 	
 
 	//Let's start to select best links by tfidf (just with 2 pages each time)
@@ -133,8 +143,8 @@ func handler(client http.ResponseWriter, request *http.Request) {
 	f.AddDocs(main_text)
 
 
-    //Map for saving links and points in tfidf
-    m_link_point := make(map[string]float64)
+    //Array for saving links and points for similarity
+    var link_points []Similarity
 
     //Map for saving the texts, if they exixt
     m_link_text := make(map[string]string)
@@ -143,13 +153,16 @@ func handler(client http.ResponseWriter, request *http.Request) {
     for _, l := range links {
 
     	//Returns the link's title and text, and a bool for "this is a good link or not"
-    	link_title, link_text, ok := getPage(client, l.String(), baseURL)
+    	link_title, link_text, ok, err := getPage(l.String(), baseURL)
 
-    	//If this is not a good link
-    	if (!ok) { continue }
+        //If this is not a good link
+        if (!ok) { 
+            fmt.Fprintf(client, err) 
+            continue
+        }
 
 		//Prints links' name
-		fmt.Fprintf(client, "%s\n", link_title)
+		//fmt.Fprintf(client, "%s\n", link_title)
 		
 		//Saves every text, if it exixts
 		m_link_text[link_title] = link_text
@@ -190,13 +203,23 @@ func handler(client http.ResponseWriter, request *http.Request) {
 		//fmt.Fprintf(client, "Similarity with %s is %f .\n", l.String(), sim)
 
 		//Saves the similarity
-		m_link_point[l.String()] = sim
+        link_points = append(link_points, Similarity{title: l.String(), point: sim})
 		
-		fmt.Fprintf(client, "Similarity with %s is %f .\n", l.String(), sim)
+		//This is not sorted
+        //fmt.Fprintf(client, "Similarity with %s is %f .\n", l.String(), sim)
     }
 
-    //TO DO sort
+    //Sorts by points
+    sort.Slice(link_points, func(i, j int) bool {
+        return link_points[i].point > link_points[j].point
+    })
 
+    fmt.Fprintf(client, "Similarity:\n")
+
+    //Prints the names and points after the sort
+    for _, link := range link_points{
+        fmt.Fprintf(client, "With %s   =   %f .\n", link.title, link.point)
+    }
 }
 
 func main() {
