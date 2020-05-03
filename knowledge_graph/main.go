@@ -223,5 +223,5 @@ func handler(client http.ResponseWriter, request *http.Request) {
 
 func main() {
     http.HandleFunc("/", handler)
-    log.Fatal(http.ListenAndServe(":8080", nil))
+    log.Fatal(http.ListenAndServe(":80", nil))
 }
