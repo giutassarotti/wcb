@@ -94,8 +94,6 @@ func getLinks(main_title string, baseURL string) ([]gjson.Result, bool, string) 
     
     //Returns links' array (not as a string)
 	links := gjson.Get(string(json), "query.pages.*.links.#.title").Array()
-
-	
     
     return links, true, ""
 }
@@ -121,13 +119,13 @@ func handler(client http.ResponseWriter, request *http.Request) {
         fmt.Fprintf(client, err)
         return 
     }
-
-	//Prints the text
-    //fmt.Fprintln(client, main_text)
     
     //Prints the exact topic and the link
     fmt.Fprintf(client, "Topic's name:   %s\n\n", main_title)
     fmt.Fprintf(client, "Topic's link:   https://%s.wikipedia.org/wiki/%s\n\n\n", lang, main_title)
+
+	//Prints the text
+    //fmt.Fprintln(client, main_text)
     
     //Returns links' array (not as a string)
     links, ok, err := getLinks(main_title, baseURL)
@@ -145,7 +143,7 @@ func handler(client http.ResponseWriter, request *http.Request) {
 
     //Array for saving links and points for similarity
     var link_points []Similarity
-
+	
     //Map for saving the texts, if they exixt
     m_link_text := make(map[string]string)
 
@@ -162,7 +160,7 @@ func handler(client http.ResponseWriter, request *http.Request) {
         }
 
 		//Prints links' name
-		//fmt.Fprintf(client, "%s\n", link_title)
+		fmt.Fprintf(client, "%s\n", link_title)
 		
 		//Saves every text, if it exixts
 		m_link_text[link_title] = link_text
@@ -174,9 +172,9 @@ func handler(client http.ResponseWriter, request *http.Request) {
 		f.AddDocs(link_text)
 
     }
-
     fmt.Fprintf(client, "\n\n\n")
 
+    
     //Computes topic's weight 
     w := f.Cal(main_text)
     
@@ -184,7 +182,7 @@ func handler(client http.ResponseWriter, request *http.Request) {
     
     //Prints the weight of the main page
     //fmt.Fprintf(client, "Weight of %s is %+v .\n", main_title, w)
-
+    
     //For every link
     for _, l := range links{
 		
@@ -206,7 +204,7 @@ func handler(client http.ResponseWriter, request *http.Request) {
         link_points = append(link_points, Similarity{title: l.String(), point: sim})
 		
 		//This is not sorted
-        //fmt.Fprintf(client, "Similarity with %s is %f .\n", l.String(), sim)
+        fmt.Fprintf(client, "Similarity with %s is %f .\n", l.String(), sim)
     }
 
     //Sorts by points
@@ -218,11 +216,12 @@ func handler(client http.ResponseWriter, request *http.Request) {
 
     //Prints the names and points after the sort
     for _, link := range link_points{
-        fmt.Fprintf(client, "With %s   =   %f .\n", link.title, link.point)
+        //fmt.Fprintf(client, "With %s   =   %f .\n", link.title, link.point)
+        fmt.Println(link)
     }
 }
 
 func main() {
     http.HandleFunc("/", handler)
-    log.Fatal(http.ListenAndServe(":80", nil))
+    log.Fatal(http.ListenAndServe(":8080", nil))
 }

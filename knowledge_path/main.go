@@ -16,7 +16,7 @@ import (
 	"github.com/wilcosheh/tfidf/similarity"
 )
 
-//   http://localhost:8080/knowledge_path?topic=Matera&topic=Palombaro_lungo&lang=it
+//   http://localhost:8080/knowledge_path?start=Matera&end=Palombaro_lungo&lang=it
 
 type Similarity struct {
     title string
@@ -28,9 +28,15 @@ func getQuery(request *http.Request) (string, string, string, bool, string) {
     args := request.URL.Query()
 
     //If there are not the topics in the query
-    if len(args["topic"]) == 0 {
-        log.Println("Error, missing required parameter 'topic'")
-        return "", "", "", false, "Error, missing required parameter 'topic'"
+    if len(args["start"]) == 0 {
+        log.Println("Error, missing required parameter 'start'")
+        return "", "", "", false, "Error, missing required parameter 'start'"
+    }
+
+    //If there are not the topics in the query
+    if len(args["end"]) == 0 {
+        log.Println("Error, missing required parameter 'end'")
+        return "", "", "", false, "Error, missing required parameter 'end'"
     }
 
     //If there is not the language in the query
@@ -39,8 +45,8 @@ func getQuery(request *http.Request) (string, string, string, bool, string) {
         return "", "", "", false, "Error, missing required parameter 'lang'"
     }
 
-    start := args["topic"][0]
-    end := args["topic"][1]
+    start := args["start"][0]
+    end := args["end"][0]
     lang := args["lang"][0]
 
     return start, end, lang, true, ""
@@ -112,6 +118,8 @@ func handler(client http.ResponseWriter, request *http.Request) {
 		return 
 	}
 
+    log.Println("\n2\n")
+
 	//Base Url for API
     baseURL := "https://" + lang + ".wikipedia.org/w/api.php?action=query"
 
@@ -123,8 +131,17 @@ func handler(client http.ResponseWriter, request *http.Request) {
         return 
     }
 
+    log.Println(client, "\n3\n")
+
     //Returns the exact title and the text of the end 
     end_title, end_text, ok, err := getPage(end, baseURL)
+
+    if (!ok) { 
+        fmt.Fprintf(client, err)
+        return 
+    }
+
+    log.Println(client, "\n4\n")
 
     //Map for saving the texts
     m_texts := make(map[string]string)
@@ -132,20 +149,22 @@ func handler(client http.ResponseWriter, request *http.Request) {
     //Adds start text and end text
     m_texts[start_title] = start_text
     m_texts[end_title] = end_text
-
-    if (!ok) { 
-        fmt.Fprintf(client, err)
-        return 
-    }
     
     //Prints the exact topic and the link of the start
     fmt.Fprintf(client, "Start's name:   %s\n\n", start_title)
-    fmt.Fprintf(client, "Start's link:   https://%s.wikipedia.org/wiki/%s\n\n\n", lang, start_title)
+    fmt.Fprintf(client, "Start's link:   https://%s.wikipedia.org/wiki/%s\n\n\n", lang, strings.ReplaceAll(start_title, " ", "_"))
 
     //Prints the exact topic and the link of the end
     fmt.Fprintf(client, "End's name:   %s\n\n", end_title)
-    fmt.Fprintf(client, "End's link:   https://%s.wikipedia.org/wiki/%s\n\n\n", lang, end_title)
-    
+    fmt.Fprintf(client, "End's link:   https://%s.wikipedia.org/wiki/%s\n\n\n", lang, strings.ReplaceAll(end_title, " ", "_"))
+
+    //Let's start the tfidf
+    f := tfidf.New()
+    f.AddDocs(start_text)
+    f.AddDocs(end_text)
+
+    log.Println(client, "\n5\n")
+
     //Returns links' array (not as a string)
     links, ok, err := getLinks(start_title, baseURL)
 
@@ -153,15 +172,11 @@ func handler(client http.ResponseWriter, request *http.Request) {
         fmt.Fprintf(client, err)
         return 
     }
-	
-
-	//Let's start to select best links by tfidf
-    f := tfidf.New()
-	f.AddDocs(start_text)
-    f.AddDocs(end_text)
 
     //Array for saving links and points for similarity
     var link_points []Similarity
+
+    log.Println("6")
 
     //For every link
     for _, l := range links {
@@ -183,8 +198,9 @@ func handler(client http.ResponseWriter, request *http.Request) {
 		
 		//Add the texts for tfidf
 		f.AddDocs(link_text)
-
     }
+
+    log.Println("\n7\n")
 
     fmt.Fprintf(client, "\n\n")
 
@@ -217,6 +233,8 @@ func handler(client http.ResponseWriter, request *http.Request) {
         //fmt.Fprintf(client, "Similarity with %s is %f .\n", l.String(), sim)
     }
 
+    log.Println("\n8\n")
+
     //Sorts by points
     sort.Slice(link_points, func(i, j int) bool {
         return link_points[i].point > link_points[j].point
@@ -228,6 +246,8 @@ func handler(client http.ResponseWriter, request *http.Request) {
     for _, link := range link_points{
         fmt.Fprintf(client, "With %s   =   %f .\n", link.title, link.point)
     }
+
+    log.Println("\n9\n")
 }
 
 func main() {
